@@ -23,6 +23,25 @@ const collectDirs = (nodes, dirs) => {
   })
 }
 
+/** Whether the bucket has any persisted collapsed state. */
+
+export const hasSavedCollapsedPaths = bucket => {
+  try {
+    return localStorage.getItem(storageKey(bucket)) !== null
+  }
+  catch {
+    return false
+  }
+}
+
+/** Every directory path in the tree. */
+
+export const allDirPaths = nodes => {
+  const dirs = new Set()
+  collectDirs(nodes, dirs)
+  return dirs
+}
+
 /** Drop collapsed paths whose directories no longer exist in the tree. */
 
 export const pruneCollapsedPaths = (nodes, paths) => {

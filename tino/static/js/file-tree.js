@@ -8,7 +8,13 @@ import {
   TOGGLE_ICON,
   escapeHtml,
 } from './constants.js'
-import { loadCollapsedPaths, pruneCollapsedPaths, saveCollapsedPaths } from './tree-state.js'
+import {
+  allDirPaths,
+  hasSavedCollapsedPaths,
+  loadCollapsedPaths,
+  pruneCollapsedPaths,
+  saveCollapsedPaths,
+} from './tree-state.js'
 import { BucketPicker } from './bucket-picker.js'
 import { TreeActions } from './tree-actions.js'
 import { TreeBuilder } from './tree-builder.js'
@@ -70,13 +76,16 @@ export class FileTree {
 
   /** Fetch file list and render the hierarchical tree. */
 
-  async loadFiles() {
+  async loadFiles(isInitialRender = false) {
     this.collapsedPaths = loadCollapsedPaths(this.app.bucket)
     const files = await this.app.api.listFiles(this.app.bucket)
     this.filePaths = new Set(files.map(fl => fl.path))
     this._nodes = TreeBuilder.build(
       files, this.app.gitStatuses, this._canEdit(),
     )
+    // Start with every folder collapsed until the user has a saved state
+    if (isInitialRender && !hasSavedCollapsedPaths(this.app.bucket))
+      this.collapsedPaths = allDirPaths(this._nodes)
     this.collapsedPaths = pruneCollapsedPaths(this._nodes, this.collapsedPaths)
     this._renderTree()
   }
