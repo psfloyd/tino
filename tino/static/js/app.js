@@ -184,7 +184,7 @@ class TinoApp {
     this.bucketEvents.connect(slug)
     writeRoute(slug, null)
     await this.git.loadStatus()
-    await this.fileTree.loadFiles()
+    await this.fileTree.loadFiles(true)
     if (restoreTabs)
       await this._restoreBucketTabs()
   }

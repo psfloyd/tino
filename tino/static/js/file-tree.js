@@ -66,29 +66,32 @@ export class FileTree {
 
   /** Fetch file list and render the hierarchical tree. */
 
-  async loadFiles() {
+  async loadFiles(isInitialRender = false) {
     const files = await this.app.api.listFiles(this.app.bucket)
     this.filePaths = new Set(files.map(fl => fl.path))
     this._nodes = TreeBuilder.build(
       files, this.app.gitStatuses, this._canEdit(),
     )
-    this._renderTree()
+    this._renderTree(isInitialRender)
   }
 
   /** Re-render the tree, applying the current search filter. */
 
-  _renderTree() {
-    const query = this.app.els.fileSearch.value
-      .trim().toLowerCase()
-    const collapsed = query ? new Set() : this._getCollapsedPaths()
-    const nodes = FileTree._filterNodes(this._nodes, query)
-    const tree = this.app.els.fileTree
-    this._canEditCached = this._canEdit()
-    tree.innerHTML = ''
-    this._renderNodes(tree, nodes, collapsed)
-  }
+   _renderTree(isInitialRender = false) {
+   const query = this.app.els.fileSearch.value.trim().toLowerCase()
+   
+   // Track open folders instead, OR check if this is initial render
+   isInitialRender = isInitialRender || this.app.els.fileTree.children.length === 0
+   const collapsed = query ? new Set() : this._getCollapsedPaths(isInitialRender)
 
-  /** Recursively keep only nodes whose path matches the query. */
+   const nodes = FileTree._filterNodes(this._nodes, query)
+   const tree = this.app.els.fileTree
+   this._canEditCached = this._canEdit()
+   tree.innerHTML = ''
+   this._renderNodes(tree, nodes, collapsed)
+  }
+  
+    /** Recursively keep only nodes whose path matches the query. */
 
   static _filterNodes(nodes, query) {
     if (!query)
@@ -116,14 +119,29 @@ export class FileTree {
     }
   }
 
-  _getCollapsedPaths() {
+  _getCollapsedPaths(isInitialRender = false) {
     const paths = new Set()
+
+    // On first load, collect ALL folder paths so they start collapsed
+    if (isInitialRender) {
+      const collectPaths = (nodes) => {
+        nodes.forEach(node => {
+          if (node.type === 'directory') {
+            paths.add(node.path)
+            if (node.children) collectPaths(node.children)
+          }
+        })
+      }
+      collectPaths(this._nodes)
+      return paths
+    }
+
+    // Subsequent re-renders: respect existing DOM state
     this.app.els.fileTree
       .querySelectorAll('.folder-item.collapsed')
       .forEach(el => paths.add(el.dataset.folder))
     return paths
   }
-
   _renderNodes(parent, nodes, collapsed) {
     nodes.forEach(node => {
       if (node.type === 'directory')
