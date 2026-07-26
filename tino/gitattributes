@@ -25,3 +25,5 @@
 *.xml text !filter !diff !merge text
 *.yaml text !filter !diff !merge text
 *.yml text !filter !diff !merge text
+*.nix text !filter !diff !merge text
+*.lock text !filter !diff !merge text
