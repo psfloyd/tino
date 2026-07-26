@@ -57,7 +57,8 @@ export class EditorCollab {
 
   _awarenessUser() {
     const name = this.app.username || 'anonymous'
-    return { color: EditorCollab._colorFor(name), name }
+    const colors = EditorCollab._colorsFor(name)
+    return { name, color: colors.color, colorLight: colors.colorLight }
   }
 
   /**
@@ -66,13 +67,18 @@ export class EditorCollab {
    * are held constant so the result is always readable, on light or dark.
    */
 
-  static _colorFor(name) {
+  static _colorsFor(name) {
     let hue = 0
     for (const ch of name)
-      hue = (hue * HASH_PRIME + ch.codePointAt(0)) % HUE_STEPS
-    return `hsl(${hue}, ${CURSOR_SATURATION}%, ${CURSOR_LIGHTNESS}%)`
-  }
+    hue = (hue * HASH_PRIME + ch.codePointAt(0)) % HUE_STEPS
 
+    return {
+      // Solid color for the cursor caret
+      color: `hsl(${hue}, ${CURSOR_SATURATION}%, ${CURSOR_LIGHTNESS}%)`,
+      // Semi-transparent color for the text selection/highlight (30% opacity)
+      colorLight: `hsla(${hue}, ${CURSOR_SATURATION}%, ${CURSOR_LIGHTNESS}%, 0.3)`
+    }
+  }
   /** Tear down the current collab session. */
 
   disconnect() {
