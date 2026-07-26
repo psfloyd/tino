@@ -13,6 +13,8 @@ const MAX_HEADING = 4
 
 const HEADING_RE = /^(?<marks>={1,4}) /u
 
+const HIGHLIGHT_PREFIX = '#t['
+
 const LINK_PREFIX = '#link("'
 
 const IMAGE_PREFIX = '#image("'
@@ -60,6 +62,7 @@ export class EditorToolbar {
     switch (action) {
       case 'bold': this._wrap('*'); break
       case 'italic': this._wrap('_'); break
+      case 'highlight': this._insertHighlight(); break
       case 'heading': this._cycleHeading(); break
       case 'bullet': this._prependLine('- '); break
       case 'numbered': this._prependLine('+ '); break
@@ -145,6 +148,19 @@ export class EditorToolbar {
     ed.view.dispatch({
       changes: { from: line.from, insert: prefix },
       selection: { anchor: pos + prefix.length },
+    })
+    ed.focus()
+  }
+
+  /** Insert a Typst highlight, using the selection as the text if present. */
+
+  _insertHighlight() {
+    const ed = this.app.els.editor
+    const { from, to } = ed.selection
+    const snippet = `${HIGHLIGHT_PREFIX}${ed.content.slice(from, to)}]`
+    ed.view.dispatch({
+      changes: { from, insert: snippet, to },
+      selection: { anchor: from + HIGHLIGHT_PREFIX.length },
     })
     ed.focus()
   }
