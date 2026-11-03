@@ -2,8 +2,10 @@
 
 import logging
 import mimetypes
+import threading
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from ..collab import CollabManager
@@ -16,9 +18,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/api/buckets/{slug}/git', tags=['git'])
 
+# GitPython runs blocking `git` subprocesses, so these must stay off the event
+# loop. Read-only routes are sync (FastAPI runs them in its threadpool).
+# git_commit stays async to await the notifier, and runs in the threadpool under
+# a lock: commits used to be serialized by the event loop and share the index.
+# git_restore stays on the loop so no room flush can land between its write and
+# the room reload.
+_COMMIT_LOCK = threading.Lock()
+
+
+def _commit(svc: GitService, *args, **kwargs) -> CommitInfo:
+    '''Run one commit at a time.'''
+    with _COMMIT_LOCK:
+        return svc.commit(*args, **kwargs)
+
 
 @router.get('/status', response_model=list[FileStatus])
-async def git_status(
+def git_status(
     slug: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -47,7 +63,10 @@ async def git_commit(
         raise HTTPException(400, 'No files specified')
 
     try:
-        result = svc.commit(slug, body.files, body.message, author=user.username, email=user.email)
+        result = await run_in_threadpool(
+            _commit, svc, slug, body.files, body.message,
+            author=user.username, email=user.email,
+        )
     except Exception as exc:
         logger.warning('Commit failed for %s (user: %s): %s', slug, user.username, exc)
         raise HTTPException(400, str(exc)) from exc
@@ -58,7 +77,7 @@ async def git_commit(
 
 
 @router.get('/log', response_model=list[CommitInfo])
-async def git_log(
+def git_log(
     slug: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -75,7 +94,7 @@ async def git_log(
 
 
 @router.get('/diff', response_model=list[DiffEntry])
-async def git_diff(
+def git_diff(
     slug: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -96,7 +115,7 @@ async def git_diff(
 
 
 @router.get('/tree/{ref}')
-async def git_tree(
+def git_tree(
     slug: str, ref: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -114,7 +133,7 @@ async def git_tree(
 
 
 @router.get('/changed/{ref}')
-async def git_changed(
+def git_changed(
     slug: str, ref: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -132,7 +151,7 @@ async def git_changed(
 
 
 @router.get('/show/{ref}/content/{path:path}')
-async def git_show(
+def git_show(
     slug: str, ref: str, path: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),
@@ -148,7 +167,7 @@ async def git_show(
 
 
 @router.get('/show/{ref}/raw/{path:path}')
-async def git_show_raw(
+def git_show_raw(
     slug: str, ref: str, path: str,
     user=Depends(require_viewer),
     svc: GitService = Depends(get_git_service),

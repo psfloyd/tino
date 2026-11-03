@@ -19,6 +19,10 @@ export class PreviewManager {
     return this.app.pinnedPreview || this.app.currentFile
   }
 
+  get bucket() {
+    return this.app.bucket
+  }
+
   /**
    * Compile the preview target (the pinned file when one is pinned, otherwise
    * the current file) and render its SVG pages in the preview pane.
@@ -83,21 +87,45 @@ export class PreviewManager {
       '<p class="preview-empty">No preview available for this file.</p>'
   }
 
-  /** Compile the current .typ file via the API and render SVG pages. */
+  /**
+   * Compile the current .typ file, one request at a time. Calls made while one
+   * is running collapse into a single follow-up, since every response holds all
+   * the SVG pages in server memory until the client has downloaded it (a save
+   * per keystroke got the worker OOM-killed by the container's 2 GB limit).
+   */
 
   async compile() {
-    if (!this.app.bucket || !this.target)
+    if (this._compiling) {
+      this._compileAgain = true
       return
-    this._renderGen = (this._renderGen || 0) + SINGLE_ITEM
-    const gen = this._renderGen
+    }
+    this._compiling = true
+    try {
+      do {
+        this._compileAgain = false
+        await this._compileOnce()
+      } while (this._compileAgain)
+    }
+    finally {
+      this._compiling = false
+    }
+  }
+
+  /** Compile via the API and render SVG pages, unless the target has changed. */
+
+  async _compileOnce() {
+    const { bucket, target } = this
+    if (!bucket || !target)
+      return
+    const isCurrent = () => bucket === this.bucket && target === this.target
     const preview = this.app.els.previewPage
     try {
-      const result = await this.app.api.compile(this.app.bucket, this.target)
-      if (gen === this._renderGen)
+      const result = await this.app.api.compile(bucket, target)
+      if (isCurrent())
         PreviewManager._renderPages(preview, result.pages)
     }
     catch (err) {
-      if (gen === this._renderGen)
+      if (isCurrent())
         this._renderError(preview, err)
     }
   }
